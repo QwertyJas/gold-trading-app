@@ -1,0 +1,39 @@
+// Central configuration for API endpoints and static strategies
+
+// Twelve Data endpoint for market data
+export const DATA_API = 'https://api.twelvedata.com/time_series';
+
+// AI recommendation service endpoint
+export const AI_API = 'https://api.yourtradingai.com';
+
+// Static, built-in strategies to fall back on when offline or AI fails
+export const staticStrategies = [
+  {
+    id: 'intraday-basic',
+    title: 'Intraday Strategy',
+    difficulty: 'Beginner',
+    confidence: 0.75,
+    steps: [
+      { label: 'HTF Bias', type: 'chart' },
+      { label: 'Order Block', type: 'chart' },
+      { label: 'FVG', type: 'chart' },
+      { label: 'Wick Reclaim', type: 'chart' },
+      { label: 'Entry Confirmation', type: 'chart' },
+      { label: 'Execute Trade', type: 'action' }
+    ]
+  },
+  {
+    id: 'swing-basic',
+    title: 'Swing Strategy',
+    difficulty: 'Intermediate',
+    confidence: 0.65,
+    steps: [
+      { label: 'Daily Trend', type: 'chart' },
+      { label: 'Retracement Level', type: 'chart' },
+      { label: 'Support/Resistance', type: 'chart' },
+      { label: 'Candlestick Setup', type: 'chart' },
+      { label: 'Risk Management', type: 'action' }
+    ]
+  }
+  // Add more built-in strategies here
+];
