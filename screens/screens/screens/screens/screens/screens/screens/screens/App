@@ -1,0 +1,87 @@
+import React, { useEffect, useState } from 'react';
+import { SafeAreaView, View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { Provider as PaperProvider, DefaultTheme, DarkTheme } from 'react-native-paper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import Icon from '@expo/vector-icons/Ionicons';
+
+// Screens
+import HomeScreen from './screens/HomeScreen';
+import DemoModeScreen from './screens/DemoModeScreen';
+import RecommendationsScreen from './screens/RecommendationsScreen';
+import ChecklistScreen from './screens/ChecklistScreen';
+import LogsScreen from './screens/LogsScreen';
+import PerformanceScreen from './screens/PerformanceScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import HowToUseScreen from './screens/HowToUseScreen';
+
+const Stack = createStackNavigator();
+const Tab = createBottomTabNavigator();
+
+function MainTabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ color, size }) => {
+          let iconName;
+          switch (route.name) {
+            case 'Home': iconName = 'home'; break;
+            case 'Demo': iconName = 'play-circle'; break;
+            case 'Rec': iconName = 'bulb'; break;
+            case 'Logs': iconName = 'list'; break;
+            case 'Stats': iconName = 'bar-chart'; break;
+            case 'Settings': iconName = 'settings'; break;
+            default: iconName = 'ellipse';
+          }
+          return <Icon name={iconName} size={size} color={color} />;
+        }
+      })}
+      tabBarOptions={{ activeTintColor: '#6200ee', inactiveTintColor: 'gray' }}
+    >
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Demo" component={DemoModeScreen} />
+      <Tab.Screen name="Rec" component={RecommendationsScreen} options={{ title: 'Recommendations' }} />
+      <Tab.Screen name="Logs" component={LogsScreen} />
+      <Tab.Screen name="Stats" component={PerformanceScreen} options={{ title: 'Performance' }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
+    </Tab.Navigator>
+  );
+}
+
+export default function App() {
+  const [theme, setTheme] = useState(DefaultTheme);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('theme').then(value => {
+      setTheme(value === 'dark' ? DarkTheme : DefaultTheme);
+    }).finally(() => setReady(true));
+  }, []);
+
+  if (!ready) {
+    return (
+      <SafeAreaView style={styles.center}>
+        <ActivityIndicator size="large" />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <PaperProvider theme={theme}>
+      <NavigationContainer theme={theme}>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Main" component={MainTabs} />
+          <Stack.Screen name="Checklist" component={ChecklistScreen} options={{ headerShown: true, title: 'Checklist' }} />
+          <Stack.Screen name="HowToUse" component={HowToUseScreen} options={{ headerShown: true, title: 'How To Use' }} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </PaperProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' }
+});
