@@ -1,0 +1,158 @@
+import React, { useEffect, useState, useRef, memo, useMemo } from 'react';
+import { View, ActivityIndicator, StyleSheet, Text, Animated, Platform, UIManager, TouchableOpacity, Alert } from 'react-native';
+import { Svg, Polyline } from 'react-native-svg';
+import PropTypes from 'prop-types';
+
+// Enable native layout animations on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const DEFAULT_API = 'https://api.twelvedata.com/time_series';
+const CACHE_TTL = 60000; // 1 minute
+const cache = new Map();
+
+/**
+ * Fetch JSON with caching (TTL) and signal.
+ */
+async function fetchWithCache(key, url, signal) {
+  const now = Date.now();
+  if (cache.has(key)) {
+    const { timestamp, data } = cache.get(key);
+    if (now - timestamp < CACHE_TTL) return data;
+  }
+  const response = await fetch(url, { signal });
+  const json = await response.json();
+  cache.set(key, { timestamp: now, data: json });
+  return json;
+}
+
+/**
+ * Sparkline: mini chart for price data with caching, animation, and retry.
+ */
+const Sparkline = memo(function Sparkline({ symbol, interval, pointsCount, width, height, strokeColor, strokeWidth, apiKey, onPress }) {
+  const [points, setPoints] = useState(null);
+  const [trendColor, setTrendColor] = useState(strokeColor || '#2563eb');
+  const [error, setError] = useState(false);
+  const [latest, setLatest] = useState(null);
+  const [reload, setReload] = useState(0);
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  const cacheKey = useMemo(() => `${symbol}_${interval}_${pointsCount}_${reload}`, [symbol, interval, pointsCount, reload]);
+
+  useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
+    const url = `${DEFAULT_API}?symbol=${encodeURIComponent(symbol)}&interval=${interval}&outputsize=${pointsCount}&apikey=${apiKey}&format=JSON`;
+
+    async function load() {
+      try {
+        setError(false);
+        const data = await fetchWithCache(cacheKey, url, controller.signal);
+        const vals = data.values || [];
+        const closes = vals.map(v => parseFloat(v.close)).reverse();
+        if (closes.length < 2) {
+          if (mounted) setPoints('');
+          return;
+        }
+        const max = Math.max(...closes);
+        const min = Math.min(...closes);
+        const range = max - min || 1;
+        const color = strokeColor || (closes[closes.length - 1] >= closes[0] ? 'green' : 'red');
+        const pts = closes.map((c, i) => {
+          const x = (i / (closes.length - 1)) * width;
+          const y = height - ((c - min) / range) * height;
+          return `${x},${y}`;
+        }).join(' ');
+        if (mounted) {
+          setTrendColor(color);
+          setPoints(pts);
+          setLatest(closes[closes.length - 1]);
+          opacity.setValue(0);
+          Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError' && mounted) {
+          setError(true);
+          setPoints('');
+        }
+      }
+    }
+
+    load();
+    return () => { mounted = false; controller.abort(); };
+  }, [cacheKey, symbol, interval, pointsCount, width, height, apiKey, strokeColor]);
+
+  // Loading state
+  if (points === null) {
+    return <ActivityIndicator testID="activity-indicator" style={{ width, height }} />;
+  }
+
+  // Error state with retry
+  if (error || points === '') {
+  return (
+        <TouchableOpacity
+      testID="retry-sparkline"
+      style={[styles.center, { width, height }]}
+      onPress={() => setReload(r => r + 1)}
+      accessibilityLabel="Retry sparkline"
+    >
+
+      <Text style={styles.errorText}>– Tap to retry</Text>
+    </TouchableOpacity>
+  );
+}
+
+
+  // Render sparkline
+  return (
+    <TouchableOpacity
+      onPress={() => onPress(latest)}
+      accessibilityLabel={`Sparkline for ${symbol}, latest price ${latest}`}
+    >
+      <View style={{ width, height }}>
+        <Svg width={width} height={height}>
+          <AnimatedPolyline
+            points={points}
+            fill="none"
+            stroke={trendColor}
+            strokeWidth={strokeWidth}
+            style={{ opacity }}
+          />
+        </Svg>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+const AnimatedPolyline = Animated.createAnimatedComponent(Polyline);
+
+Sparkline.propTypes = {
+  symbol: PropTypes.string,
+  interval: PropTypes.string,
+  pointsCount: PropTypes.number,
+  width: PropTypes.number,
+  height: PropTypes.number,
+  strokeColor: PropTypes.string,
+  strokeWidth: PropTypes.number,
+  apiKey: PropTypes.string.isRequired,
+  onPress: PropTypes.func,
+};
+
+Sparkline.defaultProps = {
+  symbol: 'XAU/USD',
+  interval: '1h',
+  pointsCount: 20,
+  width: 100,
+  height: 30,
+  strokeColor: null,
+  strokeWidth: 1,
+  onPress: latest => { if (latest !== null) Alert.alert('Current Price', String(latest)); },
+};
+
+const styles = StyleSheet.create({
+  center: { justifyContent: 'center', alignItems: 'center' },
+  errorText: { color: '#888', fontSize: 12 }
+});
+
+export default Sparkline;
